@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Die Reise deines Handys</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --ink:#16202e; --muted:#6a7686; --line:#e7eaef; --c0:#c77d3a; --c1:#59616e; --c2:#2f73b8; --c3:#c0453a; }
+  html, body { background:#dfe4e6; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; color:var(--ink); }
+  .app { max-width:900px; margin:18px auto; background:#fff; border-radius:20px; overflow:hidden; box-shadow:0 18px 50px rgba(20,30,45,.16); }
+
+  .top { padding:22px 26px 18px; background:linear-gradient(135deg,#16283f 0%,#0f1c2e 55%,#123b45 100%); color:#fff; }
+  .top .kick { font-size:12px; letter-spacing:.18em; text-transform:uppercase; font-weight:700; opacity:.7; }
+  .top h1 { font-size:26px; font-weight:800; margin:6px 0 5px; letter-spacing:-.01em; }
+  .top p { font-size:13.5px; opacity:.82; max-width:60ch; }
+
+  .mapwrap { background:linear-gradient(180deg,#cfe6f2 0%,#bcdcec 100%); }
+  svg.map { display:block; width:100%; height:auto; }
+  .grat { stroke:#a9cfe1; stroke-width:.5; opacity:.6; }
+  .country { fill:#e7e2d6; stroke:#c9c3b4; stroke-width:.4; }
+  .country.sh { fill:#b9c6cc; opacity:.45; stroke:none; }
+  .fb { fill:#e7e2d6; stroke:#c9c3b4; stroke-width:1; }
+  .fb-sh { fill:#b9c6cc; opacity:.45; }
+  .route-base { fill:none; stroke:#5c7488; stroke-width:2.2; stroke-dasharray:2 7; stroke-linecap:round; opacity:.8; }
+  .route-prog { fill:none; stroke:#16283f; stroke-width:3; stroke-linecap:round; }
+  .legpill rect { fill:#fff; stroke:#dfe6ea; }
+  .legpill text { font-size:10.5px; fill:#4a5560; font-weight:600; }
+  .legpill.on rect { fill:#16283f; stroke:#16283f; }
+  .legpill.on text { fill:#fff; }
+  .pin { cursor:pointer; }
+  .pin .halo { opacity:0; transform-box:fill-box; transform-origin:center; }
+  .pin.active .halo { opacity:1; animation:pulse 1.8s ease-out infinite; }
+  @keyframes pulse { 0%{transform:scale(.7);opacity:.45} 100%{transform:scale(2.1);opacity:0} }
+  .pin .core { transition:r .15s ease; filter:drop-shadow(0 2px 3px rgba(0,0,0,.3)); }
+  .pin.active .core { r:15; }
+  .pin:hover .core { r:14; }
+  .pin text { font-size:12px; font-weight:800; fill:#fff; pointer-events:none; }
+  .ship { filter:drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+
+  .controls { display:flex; align-items:center; gap:14px; padding:14px 26px 4px; }
+  .nav { border:1px solid var(--line); background:#fff; border-radius:10px; width:40px; height:38px; font-size:18px; cursor:pointer; color:var(--ink); display:flex; align-items:center; justify-content:center; }
+  .nav:hover { background:#f5f7f9; } .nav:disabled { opacity:.35; cursor:default; }
+  .steps { display:flex; gap:8px; flex:1; justify-content:center; }
+  .sdot { width:34px; height:34px; border-radius:50%; border:2px solid var(--line); background:#fff; font-weight:800; font-size:13px; color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+  .sdot.active { color:#fff; transform:scale(1.08); }
+  .prog { font-size:12px; color:var(--muted); font-weight:600; min-width:92px; text-align:right; }
+
+  .card { padding:6px 26px 20px; }
+  .cardbox { border:1px solid var(--line); border-radius:16px; overflow:hidden; }
+  .cardhead { padding:15px 20px 13px; color:#fff; }
+  .cardhead .step { font-size:11px; letter-spacing:.1em; text-transform:uppercase; font-weight:800; opacity:.85; }
+  .cardhead h2 { font-size:19px; font-weight:800; margin-top:2px; }
+  .cardhead .leg { font-size:12px; opacity:.92; margin-top:5px; }
+  .cardbody { padding:15px 20px 17px; }
+  .cardbody p { font-size:14px; line-height:1.55; }
+  .meter { margin:14px 0 4px; }
+  .meter .ml { display:flex; justify-content:space-between; font-size:11.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-bottom:5px; }
+  .meter .track { height:9px; background:#eef1f4; border-radius:6px; overflow:hidden; }
+  .meter .fill { height:100%; width:0; border-radius:6px; transition:width .6s cubic-bezier(.2,.7,.2,1); }
+  .src { font-size:11px; color:#9aa3ae; margin-top:12px; }
+
+  .fazit { margin:0 26px 10px; background:#eef7f2; border-left:3px solid #16a06f; border-radius:0 10px 10px 0; padding:13px 17px; font-size:13px; line-height:1.5; }
+  .fazit b { color:#0e7d55; }
+  .attr { padding:0 26px 20px; font-size:10.5px; color:#a6a59b; }
+
+  @media (max-width:560px){ .top h1{font-size:22px} .prog{display:none} }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="top">
+    <div class="kick">Interaktive Weltreise</div>
+    <h1>Die Reise deines Handys</h1>
+    <p>Von der Mine bis zum Schrottplatz – tippe auf eine Station oder nutze die Pfeile und begleite das Frachtschiff um die Welt.</p>
+  </div>
+
+  <div class="mapwrap">
+    <svg class="map" viewBox="0 0 900 450" role="img" aria-label="Weltkarte der Handy-Reise">
+      <g class="grat">
+        <line x1="75" y1="0" x2="75" y2="450"/><line x1="150" y1="0" x2="150" y2="450"/><line x1="225" y1="0" x2="225" y2="450"/><line x1="300" y1="0" x2="300" y2="450"/><line x1="375" y1="0" x2="375" y2="450"/><line x1="450" y1="0" x2="450" y2="450"/><line x1="525" y1="0" x2="525" y2="450"/><line x1="600" y1="0" x2="600" y2="450"/><line x1="675" y1="0" x2="675" y2="450"/><line x1="750" y1="0" x2="750" y2="450"/><line x1="825" y1="0" x2="825" y2="450"/>
+        <line x1="0" y1="75" x2="900" y2="75"/><line x1="0" y1="150" x2="900" y2="150"/><line x1="0" y1="225" x2="900" y2="225"/><line x1="0" y1="300" x2="900" y2="300"/><line x1="0" y1="375" x2="900" y2="375"/>
+      </g>
+
+      <!-- Ersatzkarte (stilisiert), falls echte Kartendaten nicht laden -->
+      <g id="fallbackLand">
+        <g class="fb-sh" transform="translate(3,4)">
+          <path d="M60,90 L60,75 L120,55 L190,52 L255,60 L295,80 L280,105 L240,120 L255,150 L220,175 L190,160 L175,130 L150,140 L120,120 L90,110 L65,95 Z"/>
+          <path d="M250,200 L295,195 L330,210 L340,245 L320,290 L300,330 L285,360 L270,335 L275,290 L255,250 L248,218 Z"/>
+          <path d="M430,150 L470,140 L520,145 L545,175 L560,190 L548,215 L555,250 L530,300 L500,315 L475,300 L465,255 L455,215 L447,196 L430,190 L420,175 L410,165 L415,150 Z"/>
+          <path d="M545,100 L560,70 L620,50 L700,40 L780,45 L850,60 L890,90 L880,130 L830,150 L800,140 L780,175 L760,195 L720,205 L690,200 L670,215 L655,190 L640,150 L610,140 L575,130 L555,115 Z"/>
+        </g>
+        <g class="fb">
+          <path d="M60,90 L60,75 L120,55 L190,52 L255,60 L295,80 L280,105 L240,120 L255,150 L220,175 L190,160 L175,130 L150,140 L120,120 L90,110 L65,95 Z"/>
+          <path d="M250,200 L295,195 L330,210 L340,245 L320,290 L300,330 L285,360 L270,335 L275,290 L255,250 L248,218 Z"/>
+          <path d="M320,30 L360,25 L380,40 L360,60 L330,55 Z"/>
+          <path d="M420,120 L430,95 L455,80 L475,72 L500,78 L525,90 L540,100 L520,120 L490,128 L460,130 L435,128 Z"/>
+          <path d="M430,150 L470,140 L520,145 L545,175 L560,190 L548,215 L555,250 L530,300 L500,315 L475,300 L465,255 L455,215 L447,196 L430,190 L420,175 L410,165 L415,150 Z"/>
+          <path d="M545,100 L560,70 L620,50 L700,40 L780,45 L850,60 L890,90 L880,130 L830,150 L800,140 L780,175 L760,195 L720,205 L690,200 L670,215 L655,190 L640,150 L610,140 L575,130 L555,115 Z"/>
+          <path d="M740,258 L790,248 L830,256 L838,278 L810,296 L760,293 L738,276 Z"/>
+        </g>
+      </g>
+
+      <!-- Echte Weltkarte (wird per Skript gefüllt) -->
+      <g id="realLand" style="display:none"></g>
+
+      <!-- Route -->
+      <path id="routeBase" class="route-base" d="M514,252 Q624,128 735,168 Q605,58 475,98 Q398,148 450,211"/>
+      <path id="prog" class="route-prog" d="M514,252 Q624,128 735,168 Q605,58 475,98 Q398,148 450,211"/>
+
+      <!-- Etappen-Labels -->
+      <g class="legpill" id="leg1"><rect x="556" y="140" width="150" height="20" rx="10"/><text x="631" y="154" text-anchor="middle">≈ 11.000 km · Schiff</text></g>
+      <g class="legpill" id="leg2"><rect x="522" y="62" width="168" height="20" rx="10"/><text x="606" y="76" text-anchor="middle">≈ 9.000 km · Schiff/Flug</text></g>
+      <g class="legpill" id="leg3"><rect x="330" y="150" width="150" height="20" rx="10"/><text x="405" y="164" text-anchor="middle">≈ 6.000 km · Export</text></g>
+
+      <!-- Stationen -->
+      <g class="pin" id="pin0" onclick="select(0)"><circle class="halo" cx="514" cy="252" r="12" fill="var(--c0)"/><circle class="core" cx="514" cy="252" r="12" fill="var(--c0)" stroke="#fff" stroke-width="2"/><text x="514" y="256" text-anchor="middle">1</text></g>
+      <g class="pin" id="pin1" onclick="select(1)"><circle class="halo" cx="735" cy="168" r="12" fill="var(--c1)"/><circle class="core" cx="735" cy="168" r="12" fill="var(--c1)" stroke="#fff" stroke-width="2"/><text x="735" y="172" text-anchor="middle">2</text></g>
+      <g class="pin" id="pin2" onclick="select(2)"><circle class="halo" cx="475" cy="98" r="12" fill="var(--c2)"/><circle class="core" cx="475" cy="98" r="12" fill="var(--c2)" stroke="#fff" stroke-width="2"/><text x="475" y="102" text-anchor="middle">3</text></g>
+      <g class="pin" id="pin3" onclick="select(3)"><circle class="halo" cx="450" cy="211" r="12" fill="var(--c3)"/><circle class="core" cx="450" cy="211" r="12" fill="var(--c3)" stroke="#fff" stroke-width="2"/><text x="450" y="215" text-anchor="middle">4</text></g>
+
+      <!-- Schiff -->
+      <g id="ship" class="ship">
+        <path d="M13,0 L3,-6 L-11,-5 L-13,0 L-11,5 L3,6 Z" fill="#33465a"/>
+        <rect x="-6" y="-3.2" width="7" height="6.4" rx="1" fill="#eef3f6"/>
+        <rect x="-2" y="-2" width="3" height="4" fill="#c0453a"/>
+      </g>
+    </svg>
+  </div>
+
+  <div class="controls">
+    <button class="nav" id="prev" onclick="step(-1)" aria-label="Zurück">‹</button>
+    <div class="steps" id="steps"></div>
+    <button class="nav" id="next" onclick="step(1)" aria-label="Weiter">›</button>
+    <div class="prog" id="prog-t"></div>
+  </div>
+
+  <div class="card">
+    <div class="cardbox">
+      <div class="cardhead" id="chead">
+        <div class="step" id="cstep"></div>
+        <h2 id="cname"></h2>
+        <div class="leg" id="cleg"></div>
+      </div>
+      <div class="cardbody">
+        <p id="cbody"></p>
+        <div class="meter">
+          <div class="ml"><span>CO₂- &amp; Ressourcenlast</span><span id="mlvl"></span></div>
+          <div class="track"><div class="fill" id="mfill"></div></div>
+        </div>
+        <div class="src" id="csrc"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fazit"><b>Fazit für die Produktion:</b> Der größte Schaden entsteht am Anfang (Herstellung) und am Ende (Elektroschrott) – nicht beim Benutzen. Deshalb sind Langlebigkeit, Reparierbarkeit und echtes Recycling die stärksten Hebel.</div>
+  <div class="attr" id="attr"></div>
+</div>
+
+<script>
+const C = ["#c77d3a","#59616e","#2f73b8","#c0453a"];
+const stations = [
+  { step:"Station 1 · Rohstoff", name:"DR Kongo, Kolwezi", leg:"Start der Reise",
+    body:"Hier beginnt die Reise. Rund 70 % des weltweiten Kobalts für Akkus stammen aus der DR Kongo. Ein Handy steckt voller Rohstoffe – ihr Abbau verbraucht enorm viel Energie und Wasser und hinterlässt oft zerstörte Landschaften.",
+    src:"Quelle: Save the Children (2024); Global E-waste Monitor 2024.", lvl:"hoch", pct:62 },
+  { step:"Station 2 · Herstellung", name:"China – Raffinerie & Fabrik", leg:"↳ ≈ 11.000 km per Schiff aus dem Kongo",
+    body:"Das Kobalt wird raffiniert, Chips werden gefertigt, das Handy montiert. Hier entsteht der größte Teil des CO₂: 35–92 % des gesamten Fußabdrucks stecken in der Herstellung – rund 58 kg CO₂ pro Gerät, vor allem durch die Chip-Produktion.",
+    src:"Quelle: Fraunhofer (everphone.com); RTR.at.", lvl:"sehr hoch", pct:95 },
+  { step:"Station 3 · Nutzung", name:"Deutschland – Verkauf & Nutzung", leg:"↳ ≈ 9.000 km – das fertige Gerät kommt an",
+    body:"Nach Tausenden Kilometern liegt das Handy im Laden. Überraschend: Das Benutzen selbst verbraucht wenig Energie. Das eigentliche Problem ist die kurze Lebensdauer – im Schnitt nur etwa 2,5 Jahre. Längere Nutzung spart in Deutschland über 5 Mio. t CO₂ pro Jahr.",
+    src:"Quelle: medienradar.de / Öko-Institut; Science Media Center.", lvl:"gering", pct:20 },
+  { step:"Station 4 · Entsorgung", name:"Ghana, Agbogbloshie – Schrottplatz", leg:"↳ ≈ 6.000 km – als Altgerät exportiert",
+    body:"Am Ende der Reise: der Schrottplatz. 2022 fielen weltweit 62 Mrd. kg Elektroschrott an – nur rund 22 % wurden fachgerecht recycelt; bis 2030 sollen es 82 Mrd. kg werden. Viel landet in Ländern wie Ghana. Nur etwa 1 % der seltenen Erden wird zurückgewonnen.",
+    src:"Quelle: Global E-waste Monitor 2024 (UNITAR / ITU).", lvl:"hoch", pct:80 }
+];
+
+// Echte Weltkarte laden (mit Fallback)
+(function drawWorld(){
+  try {
+    if (!window.d3 || !window.topojson) return;
+    const proj = d3.geoEquirectangular().scale(900/(2*Math.PI)).translate([450,225]);
+    const geo = d3.geoPath(proj);
+    fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json")
+      .then(r => r.json())
+      .then(topo => {
+        const feats = topojson.feature(topo, topo.objects.countries).features;
+        const g = document.getElementById("realLand");
+        const NS = "http://www.w3.org/2000/svg";
+        // leichter Schlagschatten
+        const sh = document.createElementNS(NS, "g");
+        sh.setAttribute("transform", "translate(2.5,3)");
+        feats.forEach(f => { const p = document.createElementNS(NS,"path"); const d = geo(f); if(!d) return; p.setAttribute("d", d); p.setAttribute("class","country sh"); sh.appendChild(p); });
+        g.appendChild(sh);
+        feats.forEach(f => { const p = document.createElementNS(NS,"path"); const d = geo(f); if(!d) return; p.setAttribute("d", d); p.setAttribute("class","country"); g.appendChild(p); });
+        document.getElementById("fallbackLand").style.display = "none";
+        g.style.display = "";
+        document.getElementById("attr").textContent = "Kartendaten: world-atlas / Natural Earth (gemeinfrei).";
+      })
+      .catch(() => {});
+  } catch (e) {}
+})();
+
+const prog = document.getElementById("prog");
+const base = document.getElementById("routeBase");
+const ship = document.getElementById("ship");
+const stepsEl = document.getElementById("steps");
+
+const full = "M514,252 Q624,128 735,168 Q605,58 475,98 Q398,148 450,211";
+const legs = ["M514,252 Q624,128 735,168", "M514,252 Q624,128 735,168 Q605,58 475,98", full];
+function measure(d){ prog.setAttribute("d", d); return prog.getTotalLength(); }
+const L = [0, measure(legs[0]), measure(legs[1]), measure(legs[2])];
+const LT = L[3];
+prog.setAttribute("d", full);
+prog.style.strokeDasharray = LT;
+
+let cur = 0, curLen = 0, raf = null;
+
+stations.forEach((s,i) => {
+  const b = document.createElement("button");
+  b.className = "sdot"; b.id = "sdot"+i; b.textContent = i+1;
+  b.onclick = () => select(i);
+  stepsEl.appendChild(b);
+});
+
+function setProgress(len){
+  prog.style.strokeDashoffset = (LT - len);
+  const p = base.getPointAtLength(len);
+  const p2 = base.getPointAtLength(Math.min(LT, len + 1.5));
+  let ang = Math.atan2(p2.y - p.y, p2.x - p.x) * 180 / Math.PI;
+  ship.setAttribute("transform", "translate(" + p.x + "," + p.y + ") rotate(" + ang + ")");
+}
+
+function animateTo(target){
+  cancelAnimationFrame(raf);
+  const startLen = curLen, t0 = performance.now();
+  const dur = 300 + Math.abs(target - startLen) * 0.9;
+  const ease = t => t < .5 ? 2*t*t : 1 - Math.pow(-2*t+2,2)/2;
+  (function frame(now){
+    const t = Math.min(1, (now - t0)/dur);
+    curLen = startLen + (target - startLen) * ease(t);
+    setProgress(curLen);
+    if (t < 1) raf = requestAnimationFrame(frame); else curLen = target;
+  })(t0);
+}
+
+function select(i){
+  cur = i;
+  const s = stations[i];
+  const head = document.getElementById("chead");
+  head.style.background = "linear-gradient(100deg," + C[i] + "," + shade(C[i],-18) + ")";
+  document.getElementById("cstep").textContent = s.step;
+  document.getElementById("cname").textContent = s.name;
+  document.getElementById("cleg").textContent = s.leg;
+  document.getElementById("cbody").textContent = s.body;
+  document.getElementById("csrc").textContent = s.src;
+  document.getElementById("mlvl").textContent = s.lvl;
+  const fill = document.getElementById("mfill");
+  fill.style.width = s.pct + "%"; fill.style.background = C[i];
+  stations.forEach((_,j) => {
+    document.getElementById("pin"+j).classList.toggle("active", j===i);
+    const d = document.getElementById("sdot"+j);
+    d.classList.toggle("active", j===i);
+    d.style.background = j===i ? C[j] : "#fff";
+    d.style.borderColor = j===i ? C[j] : "";
+    d.style.color = j===i ? "#fff" : "";
+  });
+  document.querySelectorAll(".legpill").forEach((el,k) => el.classList.toggle("on", k === i-1));
+  document.getElementById("prev").disabled = (i===0);
+  document.getElementById("next").disabled = (i===stations.length-1);
+  document.getElementById("prog-t").textContent = "Station " + (i+1) + " von " + stations.length;
+  animateTo(L[i]);
+}
+
+function step(d){ const n = cur + d; if (n>=0 && n<stations.length) select(n); }
+function shade(hex, amt){
+  const n = parseInt(hex.slice(1),16);
+  let r=(n>>16)+amt, g=((n>>8)&255)+amt, b=(n&255)+amt;
+  r=Math.max(0,Math.min(255,r)); g=Math.max(0,Math.min(255,g)); b=Math.max(0,Math.min(255,b));
+  return "#" + (r<<16 | g<<8 | b).toString(16).padStart(6,"0");
+}
+document.addEventListener("keydown", e => { if(e.key==="ArrowRight") step(1); if(e.key==="ArrowLeft") step(-1); });
+
+setProgress(0);
+select(0);
+</script>
+</body>
+</html>
